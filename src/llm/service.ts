@@ -1,7 +1,7 @@
 import { Groq } from 'groq-sdk';
 import OpenAI from 'openai';
 import { config } from '../config/index.js';
-import { Message } from '../db/sqlite.js';
+import { Message } from '../db/firestore.js';
 
 const groq = new Groq({ apiKey: config.GROQ_API_KEY });
 const openRouter = config.OPENROUTER_API_KEY 

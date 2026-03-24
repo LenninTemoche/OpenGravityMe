@@ -1,0 +1,71 @@
+# Guía de OpenGravityMe: De Local a la Nube 🌌
+
+Esta guía describe los pasos realizados en el proyecto desde su concepción en local hasta su migración completa a Firebase Cloud.
+
+---
+
+## 1. Configuración Inicial (Local)
+Originalmente, el proyecto funcionaba con **SQLite**.
+- **Motor**: Bun/Node.js + TSX.
+- **Base de Datos**: `better-sqlite3` guardando `memory.db` en local.
+- **Interface**: Telegram (grammy).
+- **IA**: Groq SDK (Llama 3.3).
+
+### Pasos iniciales realizados:
+1. Creación del proyecto (`package.json`, `tsconfig.json`).
+2. Configuración del bot en `@BotFather` de Telegram.
+3. Creación de una whitelist de IDs de Telegram para acceso privado.
+4. Implementación del `AgentLoop` (bucle de razonamiento con herramientas).
+
+---
+
+## 2. Migración a Firebase (Cloud)
+Para que el agente tenga memoria persistente en cualquier lugar y no dependa de un archivo local, migramos a **Firebase Firestore**.
+
+### Paso 2.1: Creación del Proyecto en Firebase
+1. Entrar a [Firebase Console](https://console.firebase.google.com/).
+2. Crear un nuevo proyecto (`opengravityme`).
+
+### Paso 2.2: Generación de Credenciales (Service Account)
+1. Ir a **Configuración del proyecto** > **Cuentas de servicio**.
+2. Hacer clic en **Generar nueva clave privada**.
+3. Se descarga un archivo `.json`. Se renombró a `service-account.json` y se colocó en la carpeta raíz del proyecto.
+4. Se agregó a `.gitignore` para evitar que se suba a repositorios públicos.
+
+### Paso 2.3: Configuración de la Base de Datos (Firestore)
+1. Ir a la pestaña **Firestore Database** en la consola.
+2. Hacer clic en **Crear base de datos**.
+3. Seleccionar **Modo Producción** (o Modo Prueba).
+4. **Reglas de Seguridad**: Para permitir la escritura inicial, se actualizaron las reglas:
+   ```javascript
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /{document=**} {
+         allow read, write: if true; // Cambiar a autenticación de admin sdk
+       }
+     }
+   }
+   ```
+5. **Permisos IAM (Google Cloud)**: Se asignó el rol **"Usuario de Cloud Datastore"** al correo del service account en [IAM & Admin](https://console.cloud.google.com/iam-admin/iam) para evitar el error `PERMISSION_DENIED`.
+
+### Paso 2.4: Indexación de la Base de Datos
+Firestore requiere índices compuestos para consultas que combinan `where` y `orderBy`.
+1. Al ejecutar el bot por primera vez con historial, Firestore arroja un error con un **link**.
+2. Al hacer clic en ese link, Firebase crea el índice necesario para ordenar los mensajes por `timestamp`.
+
+---
+
+## 3. Correcciones Realizadas
+
+- **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
+- **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
+- **NodeNext**: Se ajustó `tsconfig.json` a `NodeNext` para manejar correctamente las importaciones de módulos ESM (`.js`).
+
+---
+
+## 4. Cómo Mantener el Proyecto
+Para futuras herramientas:
+1. Agrégalas en `src/tools/index.ts`.
+2. Los datos de la conversación se guardan automáticamente en la colección `messages` de Firestore.
+3. La "memoria a largo plazo" (key-value) se guarda en la colección `memory`.

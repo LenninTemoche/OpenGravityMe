@@ -1,5 +1,5 @@
 import { llmService } from '../llm/service.js';
-import { dbService, Message } from '../db/sqlite.js';
+import { dbService, Message } from '../db/firestore.js';
 import { toolDefinitions, toolHandlers } from '../tools/index.js';
 
 const SYSTEM_PROMPT = `
@@ -7,6 +7,7 @@ Eres OpenGravity, un asistente de IA personal.
 Tu objetivo es ayudar al usuario de forma clara y eficiente.
 Tienes acceso a herramientas si las necesitas.
 Sé conciso y profesional.
+IMPORTANTE: No menciones el nombre de las funciones internas ni uses etiquetas como <function> en tu respuesta de texto. Usa las herramientas a través de la interfaz oficial.
 `;
 
 export class AgentLoop {
@@ -17,11 +18,11 @@ export class AgentLoop {
   }
 
   async run(userInput: string, callback: (text: string) => void) {
-    // 1. Save user msg to DB
-    dbService.saveMessage(this.userId, 'user', userInput);
+    // 1. Save user msg to Firestore
+    await dbService.saveMessage(this.userId, 'user', userInput);
 
-    // 2. Fetch history
-    const history = dbService.getHistory(this.userId);
+    // 2. Fetch history from Firestore
+    const history = await dbService.getHistory(this.userId);
     const messages: Message[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...history
@@ -72,7 +73,7 @@ export class AgentLoop {
 
       // No tool calls — this is the final response, send it to the user
       if (content) {
-        dbService.saveMessage(this.userId, 'assistant', content);
+        await dbService.saveMessage(this.userId, 'assistant', content);
         callback(content);
       }
 

@@ -1,18 +1,19 @@
 # OpenGravityMe 🌌
 
-Tu agente de IA personal, local, privado y seguro.
+Tu agente de IA personal, local, privado y seguro, ahora con memoria en la nube.
 
 ## Características
 - **Telegram Bot**: Única interfaz para interactuar con tu agente.
 - **LLM Flexible**: Usa Groq (llama-3.3-70b) como motor principal y OpenRouter como respaldo.
-- **Memoria Persistente**: SQLite para recordar conversaciones anteriores.
+- **Memoria en la Nube**: Google Firebase (Firestore) para persistencia escalable.
 - **Herramientas**: Capacidad de ejecutar funciones locales (ej. `get_current_time`).
-- **Seguridad**: Whitelist de IDs de Telegram para acceso privado.
+- **Seguridad**: Whitelist de IDs de Telegram y credenciales seguras.
 
 ## Requisitos
 - Node.js v20+
 - Telegram Bot Token (@BotFather)
 - Groq API Key
+- Cuenta de Firebase (Firestore activo)
 
 ## Instalación
 
@@ -21,30 +22,29 @@ Tu agente de IA personal, local, privado y seguro.
    ```bash
    npm install
    ```
-3. Configura las variables de entorno en un archivo `.env` (usa `.env.example` como base):
+3. **Firebase Setup**:
+   - Descarga tu `service-account.json` desde la consola de Firebase.
+   - Colócalo en la raíz del proyecto.
+4. Configura las variables de entorno en un archivo `.env`:
    ```env
    TELEGRAM_BOT_TOKEN="tu_token"
-   TELEGRAM_ALLOWED_USER_IDS="tu_id,otro_id"
+   TELEGRAM_ALLOWED_USER_IDS="tu_id"
    GROQ_API_KEY="tu_clave_groq"
+   GOOGLE_APPLICATION_CREDENTIALS="./service-account.json"
    ```
 
 ## Ejecución
 
-En desarrollo (con hot-reload):
 ```bash
 npm run dev
 ```
 
-En producción:
-```bash
-npm run build
-npm start
-```
+Para más detalles paso a paso, consulta [Guia.md](./Guia.md).
 
 ## Estructura del Proyecto
-- `src/bot/`: Lógica del bot de Telegram (grammy).
-- `src/agent/`: Bucle de razonamiento del agente.
-- `src/llm/`: Integración con APIs de modelos de lenguaje.
-- `src/tools/`: Herramientas disponibles para el agente.
-- `src/db/`: Capa de persistencia (SQLite).
-- `src/config/`: Validación de variables de entorno.
+- `src/bot/`: Lógica del de Telegram (grammy).
+- `src/agent/`: Bucle de razonamiento (AgentLoop).
+- `src/db/`: Capa de persistencia en Firestore Cloud.
+- `src/llm/`: Integración con Groq y OpenRouter.
+- `src/tools/`: Herramientas (funciones que la IA puede usar).
+- `src/config/`: Validación de entorno con Zod.
