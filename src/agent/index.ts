@@ -42,11 +42,7 @@ export class AgentLoop {
 
       const { content, tool_calls } = response as any;
 
-      if (content) {
-        dbService.saveMessage(this.userId, 'assistant', content);
-        callback(content);
-      }
-
+      // If there are tool calls, process them first WITHOUT sending content to user
       if (tool_calls && tool_calls.length > 0) {
         // Add the assistant message with tool calls to history
         messages.push({
@@ -74,7 +70,13 @@ export class AgentLoop {
         continue;
       }
 
-      break; // No more tool calls, exit loop
+      // No tool calls — this is the final response, send it to the user
+      if (content) {
+        dbService.saveMessage(this.userId, 'assistant', content);
+        callback(content);
+      }
+
+      break; // Final response sent, exit loop
     }
   }
 }
