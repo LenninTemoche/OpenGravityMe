@@ -15,8 +15,9 @@ export const llmService = {
   async chat(messages: Message[]): Promise<string> {
     try {
       const response = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-specdec',
+        model: config.GROQ_MODEL,
         messages: messages as any,
+        max_tokens: 4000,
       });
       return response.choices[0]?.message?.content || 'No response from Groq';
     } catch (error) {
@@ -26,6 +27,7 @@ export const llmService = {
         const response = await openRouter.chat.completions.create({
           model: config.OPENROUTER_MODEL,
           messages: messages as any,
+          max_tokens: 4000,
         });
         return response.choices[0]?.message?.content || 'No response from OpenRouter';
       }
@@ -36,15 +38,26 @@ export const llmService = {
   async chatWithTools(messages: Message[], tools: any[]): Promise<any> {
     try {
       const response = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-specdec',
+        model: config.GROQ_MODEL,
         messages: messages as any,
         tools: tools,
         tool_choice: 'auto',
+        max_tokens: 4000,
       });
       return response.choices[0]?.message;
     } catch (error) {
        console.error('Groq Tool Error:', error);
-       // Fallback for tools could be more complex, keeping it simple for now
+       if (openRouter) {
+         console.log('Falling back to OpenRouter for tools...');
+         const response = await openRouter.chat.completions.create({
+           model: config.OPENROUTER_MODEL,
+           messages: messages as any,
+           tools: tools,
+           tool_choice: 'auto',
+           max_tokens: 4000,
+         });
+         return response.choices[0]?.message;
+       }
        throw error;
     }
   }

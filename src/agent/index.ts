@@ -48,24 +48,26 @@ export class AgentLoop {
       }
 
       if (tool_calls && tool_calls.length > 0) {
+        // Add the assistant message with tool calls to history
+        messages.push({
+          role: 'assistant',
+          content: content || null,
+          tool_calls: tool_calls,
+        } as any);
+
         for (const toolCall of tool_calls) {
           const handler = toolHandlers[toolCall.function.name];
           if (handler) {
             console.log(`Executing tool: ${toolCall.function.name}`);
             const result = handler(JSON.parse(toolCall.function.arguments || '{}'));
             
-            const toolMsg: Message = {
-              role: 'tool' as any,
-              content: JSON.stringify(result),
-            };
-            // Add to messages for the next LLM call
-            messages.push({ role: 'assistant', content: content || '' } as any);
+            // Add tool response message
             messages.push({
-                role: 'tool' as any,
-                content: JSON.stringify(result),
+              role: 'tool' as any,
+              tool_call_id: toolCall.id,
+              name: toolCall.function.name,
+              content: JSON.stringify(result),
             } as any);
-            
-            // Save tool call result to DB if needed (optional)
           }
         }
         // Continue loop to allow LLM to process tool results
