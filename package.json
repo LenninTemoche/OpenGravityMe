@@ -27,7 +27,10 @@
     "google-tts-api": "^2.0.2",
     "grammy": "^1.41.1",
     "groq-sdk": "^1.1.1",
+    "mammoth": "^1.12.0",
     "openai": "^6.32.0",
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -56,7 +56,23 @@ Firestore requiere índices compuestos para consultas que combinan `where` y `or
 
 ---
 
-## 3. Correcciones Realizadas
+## 3. Implementación de Notas de Voz
+Se dotó al agente de capacidad auditiva y verbal manteniéndolo gratuito y escalable.
+
+### Paso 3.1: Speech-to-Text (Reconocimiento Audivitivo)
+1. Telegram guarda las notas de voz en formato `.ogg`. El bot obtiene el enlace (`getFile`) y descarga el buffer.
+2. Se implementó una llamada a la API de **Groq** usando el modelo `whisper-large-v3`, enviando el archivo de audio.
+3. Groq devuelve la transcripción en milisegundos.
+
+### Paso 3.2: Text-to-Speech (Respuesta Verbal)
+1. Originalmente exploramos *Google Cloud TTS*, pero al requerir permisos de facturación incompatibles con una capa 100% gratuita, se descartó.
+2. Se integró la librería open source `google-tts-api`, que usa la interfaz pública gratuita de Google Translate.
+3. Al tener un límite de 200 caracteres, se utilizó la función `getAllAudioBase64`, que corta inteligentemente el texto en oraciones, procesa cada trozo y los une (`Buffer.concat`) devolviendo un audio consolidado de cualquier longitud.
+4. El archivo final se envía a Telegram usando `InputFile` y se borran los archivos temporales generados en local.
+
+---
+
+## 4. Correcciones Realizadas
 
 - **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
 - **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
@@ -64,7 +80,7 @@ Firestore requiere índices compuestos para consultas que combinan `where` y `or
 
 ---
 
-## 4. Cómo Mantener el Proyecto
+## 5. Cómo Mantener el Proyecto
 Para futuras herramientas:
 1. Agrégalas en `src/tools/index.ts`.
 2. Los datos de la conversación se guardan automáticamente en la colección `messages` de Firestore.

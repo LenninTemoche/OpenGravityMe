@@ -17,9 +17,9 @@ export class AgentLoop {
     this.userId = userId;
   }
 
-  async run(userInput: string, callback: (text: string) => void) {
-    // 1. Save user msg to Firestore
-    await dbService.saveMessage(this.userId, 'user', userInput);
+  async run(userInput: string, base64Image: string | undefined, callback: (text: string) => void) {
+    // 1. Save user msg to Firestore (saving only the text to avoid bloated DB if image is passed)
+    await dbService.saveMessage(this.userId, 'user', userInput + (base64Image ? ' [Imagen adjunta]' : ''));
 
     // 2. Fetch history from Firestore
     const history = await dbService.getHistory(this.userId);
@@ -27,6 +27,24 @@ export class AgentLoop {
       { role: 'system', content: SYSTEM_PROMPT },
       ...history
     ];
+
+    // If there's an image, replace the last user message (the one we just saved text for)
+    // with a multimodal array format in the current 'messages' array for Groq execution
+    if (base64Image) {
+        messages.push({
+            role: 'user',
+            content: [
+                { type: 'text', text: userInput },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+            ] as any
+        } as Message);
+    } else {
+        // Just text goes at the end of history if we needed to trigger it
+        messages.push({
+            role: 'user',
+            content: userInput
+        } as Message);
+    }
 
     let iterations = 0;
     const MAX_ITERATIONS = 5;
