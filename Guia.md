@@ -72,7 +72,25 @@ Se dotó al agente de capacidad auditiva y verbal manteniéndolo gratuito y esca
 
 ---
 
-## 4. Correcciones Realizadas
+## 4. IA Multimodal y Lectura de Documentos
+Para empoderar al agente como asistente integral, se añadió la capacidad de "ver" y de leer documentos ofimáticos.
+
+### Paso 4.1: Lectura de Imágenes (Vision)
+1. Telegram agrupa las imágenes enviadas en distintas resoluciones. Nuestro bot (`message:photo`) toma la de mayor tamaño.
+2. Descarga la imagen en crudo y la convierte de Buffer a base64.
+3. Se actualizó la estructura interna en `AgentLoop` para enviar un arreglo multimodal compatible con la API de OpenAI/Groq/OpenRouter, inyectando la imagen codificada allí.
+4. Dada la baja disponibilidad de modelos Llama Vision en Groq, la app depende del robusto sistema de `fallback` hacia `OpenRouter` configurado como `Gemini 2.5 Flash`, el cual procesa imágenes instantáneamente.
+
+### Paso 4.2: Parseo de Documentos (PDF, Word, Excel)
+Se instalaron librerías ligeras open-source ejecutadas puramente en Node para asegurar privacidad local y costo cero:
+- **PDF**: `pdf-parse` (usando `createRequire` para soporte CJS) lee vectores a texto.
+- **DOCX**: `mammoth` lo convierte limpiamente sacando el raw text.
+- **XLSX**: `xlsx` (SheetJS) lee múltiples páginas tabuladas y las inyecta como CSV.
+El archivo se descarga de Telegram, se intercepta en `message:document`, se parsea y se envía al texto maestro del agente como un mensaje larguísimo para su análisis íntegro.
+
+---
+
+## 5. Correcciones Realizadas
 
 - **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
 - **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
@@ -80,7 +98,7 @@ Se dotó al agente de capacidad auditiva y verbal manteniéndolo gratuito y esca
 
 ---
 
-## 5. Cómo Mantener el Proyecto
+## 6. Cómo Mantener el Proyecto
 Para futuras herramientas:
 1. Agrégalas en `src/tools/index.ts`.
 2. Los datos de la conversación se guardan automáticamente en la colección `messages` de Firestore.

@@ -5,6 +5,7 @@ Tu agente de IA personal, local, privado y seguro, ahora con memoria en la nube.
 ## Características
 - **Telegram Bot**: Única interfaz para interactuar con tu agente.
 - **Interacción por Voz 🎙️**: Envíale notas de voz y te responderá con audio. (Usa *Whisper* de Groq para STT súper rápido y *Google Translate TTS* gratis para síntesis).
+- **IA Multimodal y Documental 👁️📄**: Sube imágenes para analizar visualmente (con backup vía OpenRouter) o envía documentos (PDF, DOCX, XLSX, TXT) para extraer y procesar su contenido al instante con utilidades locales gratuitas.
 - **LLM Flexible**: Usa Groq (llama-3.3-70b) como motor principal y OpenRouter como respaldo.
 - **Memoria en la Nube**: Google Firebase (Firestore) para persistencia escalable.
 - **Herramientas**: Capacidad de ejecutar funciones locales (ej. `get_current_time`).
