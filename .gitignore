@@ -3,3 +3,6 @@ dist
 .env
 memory.db
 service-account.json
+credentials.json
+# Gog CLI
+gog.exe

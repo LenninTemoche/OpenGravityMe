@@ -90,7 +90,44 @@ El archivo se descarga de Telegram, se intercepta en `message:document`, se pars
 
 ---
 
-## 5. Correcciones Realizadas
+## 5. Habilidades de Contexto (Google Workspace)
+Se ha integrado de forma nativa el CLI en Go llamado `gog` para permitirle al asistente interactuar con tus datos directos de Google en tiempo real.
+
+### Paso 5.1: Herramientas Conectadas
+Se extrajo el control total de Gmail, Calendar y Sheets a través del `toolHandlers` (`src/tools/index.ts`):
+1.  **Manejo Robusto**: Todos los comandos ejecutan `execSync` con grandes reservas de memoria (`10MB maxBuffer`) para extraer miles de correos sin colgar el hilo principal de NodeJS.
+2.  **Rutas Seguras**: `gog.exe` fue incrustado localmente y el código detecta su ubicación automáticamente usando `import.meta.url`, haciendo la ejecución 100% independiente del directorio desde donde inicies el bot.
+
+### Paso 5.2: Inyección de Lógica (Prompt System)
+El prompt del sistema (`SYSTEM_PROMPT`) fue inyectado con las directrices *OpenClaw* de Workspace:
+-   **Prioridad y Síntesis**: El agente resume hilos y resalta correos importantes (urgentes, finanzas, facturas).
+-   **Briefing Matutino**: Al pedírselo, lee inteligentemente tus eventos de calendario (`gog_calendar_events`) y tus `is:unread` en Gmail para formular un reporte inicial.
+
+### Paso 5.3: Habilitación de APIs en Google Cloud
+Antes de poder extraer tus correos, necesitas indicarle a tu proyecto en Google Cloud qué herramientas de Workspace usarás.
+1. Entra a tu proyecto en [Google Cloud Console](https://console.cloud.google.com/).
+2. Busca y navega a **"APIs y Servicios" > "Biblioteca" (Library)**.
+3. Busca y habilita (clic en *Enable*) una por una las siguientes APIs:
+   - **Gmail API** (Para leer correos)
+   - **Google Calendar API** (Para leer eventos)
+   - **Google Sheets API** (Para extraer hojas de cálculo)
+   - **Google Docs API** y **Google Drive API** (Recomendadas para el ecosistema).
+
+### Paso 5.4: Autenticación OAuth Local
+Dado que el bot corre localmente, el agente se apalanca en las credenciales "Oauth Client ID (Desktop App)" de la Nube de Google descargadas en la raíz bajo el nombre `credentials.json`.
+1. Primero registramos las credenciales en gog:
+   ```bash
+   .\gog auth credentials credentials.json
+   ```
+2. Luego autorizamos tu cuenta personal:
+   ```bash
+   .\gog auth add usuario@gmail.com --services gmail,calendar,drive,contacts,docs,sheets
+   ```
+ *(Nota: Si lanza Error 403, recuerda añadir tu email a "Test Users" en la Pantalla de Consentimiento de tu Google Cloud Console).*
+
+---
+
+## 6. Correcciones Realizadas
 
 - **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
 - **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
@@ -98,7 +135,7 @@ El archivo se descarga de Telegram, se intercepta en `message:document`, se pars
 
 ---
 
-## 6. Cómo Mantener el Proyecto
+## 7. Cómo Mantener el Proyecto
 Para futuras herramientas:
 1. Agrégalas en `src/tools/index.ts`.
 2. Los datos de la conversación se guardan automáticamente en la colección `messages` de Firestore.
