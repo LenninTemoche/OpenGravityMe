@@ -9,7 +9,7 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string(),
   GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
   OPENROUTER_API_KEY: z.string().optional(),
-  OPENROUTER_MODEL: z.string().default('google/gemini-2.5-flash'),
+  OPENROUTER_MODEL: z.string().default('google/gemini-2.0-flash-001'),
   OPENROUTER_MODEL_SUMMARY: z.string().default('google/gemini-2.0-flash-001'),
   OPENROUTER_MODEL_LOGIC: z.string().default('deepseek/deepseek-chat'),
   OPENROUTER_MODEL_TECH: z.string().default('qwen/qwen-2.5-72b-instruct'),

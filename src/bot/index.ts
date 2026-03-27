@@ -7,6 +7,60 @@ import path from 'path';
 
 export const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 
+// Límite de caracteres de Telegram por mensaje
+const TELEGRAM_MESSAGE_LIMIT = 4000;
+
+/**
+ * Envía un mensaje largo dividiéndolo en múltiples partes si es necesario
+ */
+async function sendLongMessage(ctx: any, text: string): Promise<void> {
+  if (text.length <= TELEGRAM_MESSAGE_LIMIT) {
+    await ctx.reply(text);
+    return;
+  }
+
+  // Dividir el texto en partes
+  const parts: string[] = [];
+  let currentIndex = 0;
+
+  while (currentIndex < text.length) {
+    // Tomar un chunk del tamaño máximo
+    let chunk = text.substring(currentIndex, currentIndex + TELEGRAM_MESSAGE_LIMIT);
+
+    // Intentar cortar en un punto natural (punto final, newline)
+    if (currentIndex + TELEGRAM_MESSAGE_LIMIT < text.length) {
+      const lastPeriod = chunk.lastIndexOf('.');
+      const lastNewline = chunk.lastIndexOf('\n');
+      const cutPoint = Math.max(lastPeriod, lastNewline);
+
+      if (cutPoint > TELEGRAM_MESSAGE_LIMIT / 2) {
+        chunk = chunk.substring(0, cutPoint + 1);
+      }
+    }
+
+    parts.push(chunk);
+    currentIndex += chunk.length;
+  }
+
+  // Enviar cada parte con indicador de continuación
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const isLast = i === parts.length - 1;
+
+    // Añadir indicador de continuación si no es el último
+    const message = parts.length > 1 && !isLast
+      ? `${part}\n\n_(continúa...)_`
+      : part;
+
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+
+    // Pequeña pausa entre mensajes para evitar rate limit
+    if (!isLast) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+}
+
 // Whitelist Middleware
 bot.use(async (ctx, next) => {
   const userId = ctx.from?.id.toString();
@@ -54,16 +108,16 @@ bot.on('message:voice', async (ctx) => {
         // 4. Generate audio response (TTS)
         await ctx.replyWithChatAction('record_voice');
         const audioPath = await audioService.synthesize(responseText);
-        
+
         // 5. Reply with Voice
         await ctx.replyWithVoice(new InputFile(audioPath));
-        
+
         // Clean up generated audio
         if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
       } catch (ttsError) {
         console.error('TTS failed, falling back to text:', ttsError);
         // Fallback to text if TTS fails
-        await ctx.reply(responseText);
+        await sendLongMessage(ctx, responseText);
       }
     });
 
@@ -107,7 +161,7 @@ bot.on('message:document', async (ctx) => {
     // 3. Process with Agent
     const agent = new AgentLoop(userId);
     await agent.run(textPrompt, undefined, async (responseText: string) => {
-      await ctx.reply(responseText);
+      await sendLongMessage(ctx, responseText);
     });
 
   } catch (error: any) {
@@ -140,7 +194,7 @@ bot.on('message:photo', async (ctx) => {
     // 2. Process with Agent (passing base64 image)
     const agent = new AgentLoop(userId);
     await agent.run(promptText, base64Image, async (responseText: string) => {
-      await ctx.reply(responseText);
+      await sendLongMessage(ctx, responseText);
     });
 
   } catch (error: any) {
@@ -160,7 +214,7 @@ bot.on('message:text', async (ctx) => {
   const agent = new AgentLoop(userId);
   try {
     await agent.run(text, undefined, async (responseText: string) => {
-      await ctx.reply(responseText);
+      await sendLongMessage(ctx, responseText);
     });
   } catch (error) {
     console.error('Error in agent loop:', error);

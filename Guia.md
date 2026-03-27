@@ -79,7 +79,7 @@ Para empoderar al agente como asistente integral, se añadió la capacidad de "v
 1. Telegram agrupa las imágenes enviadas en distintas resoluciones. Nuestro bot (`message:photo`) toma la de mayor tamaño.
 2. Descarga la imagen en crudo y la convierte de Buffer a base64.
 3. Se actualizó la estructura interna en `AgentLoop` para enviar un arreglo multimodal compatible con la API de OpenAI/Groq/OpenRouter, inyectando la imagen codificada allí.
-4. Dada la baja disponibilidad de modelos Llama Vision en Groq, la app depende del robusto sistema de `fallback` hacia `OpenRouter` configurado como `Gemini 2.5 Flash`, el cual procesa imágenes instantáneamente.
+4. Dada la baja disponibilidad de modelos Llama Vision en Groq, la app depende del robusto sistema de `fallback` hacia `OpenRouter` configurado como `Gemini 2.0 Flash`, el cual procesa imágenes instantáneamente.
 
 ### Paso 4.2: Parseo de Documentos (PDF, Word, Excel)
 Se instalaron librerías ligeras open-source ejecutadas puramente en Node para asegurar privacidad local y costo cero:
@@ -127,84 +127,193 @@ Dado que el bot corre localmente, el agente se apalanca en las credenciales "Oau
 
 ---
 
-## 6. Mejora de Lectura de Correos y Smart Routing
+## 6. Lectura de Correos - Implementación y Solución de Problemas
 
-### Paso 6.1: Implementación de `gog_gmail_get`
+### Paso 6.1: Validación Estricta de IDs de Gmail
 
-Para poder leer el **cuerpo completo** de los correos (no solo el snippet), se añadió una nueva herramienta:
+**Problema Identificado**: El modelo de IA estaba modificando los IDs de correo entre la búsqueda y la lectura, causando errores 404.
 
-1. **Nueva Herramienta en `src/tools/index.ts`**:
-   - `gog_gmail_get`: Obtiene el cuerpo completo, asunto, remitente y fecha de un correo usando el **thread ID**.
-   - **Importante**: Usa el campo `"id"` devuelto por `gog_gmail_search` (ej: `"19d1c57009c3ebd8"`), no el `messageId` interno.
+**Solución Implementada**:
 
-2. **Limpieza Automática de HTML**:
-   - Se implementó la función `cleanEmailBody()` que elimina:
-     - Etiquetas `<style>` y `<script>`
-     - Todo el HTML con regex
-     - Normaliza espacios
-     - Límite de 12,000 caracteres para no saturar el contexto del modelo
-
-3. **Descripción Mejorada en la Herramienta**:
+1. **Función de Validación** (`src/tools/index.ts`):
    ```typescript
-   {
-     name: 'gog_gmail_get',
-     description: 'Obtiene el contenido completo (cuerpo, asunto, remitente, fecha) de un correo electrónico específico usando el ID del hilo de Gmail. IMPORTANTE: Usa el campo "id" devuelto por gog_gmail_search (no el messageId interno).'
+   function isValidGmailThreadId(id: string): boolean {
+     return /^[a-f0-9]{16}$/i.test(id);
    }
    ```
 
-### Paso 6.2: Smart Routing de Modelos (Fallback en Cascada)
-
-Para evitar rate limits y optimizar costos, se implementó un sistema de fallback inteligente:
-
-1. **Configuración en `.env`**:
-   ```env
-   OPENROUTER_MODEL="google/gemini-2.5-flash"        # Principal
-   OPENROUTER_MODEL_SUMMARY="google/gemini-2.0-flash-001"  # Resúmenes
-   OPENROUTER_MODEL_LOGIC="deepseek/deepseek-chat"   # Razonamiento
-   OPENROUTER_MODEL_TECH="qwen/qwen-2.5-72b-instruct" # Técnico
-   GROQ_MODEL="llama-3.3-70b-versatile"              # Fallback final
+2. **Handler de `gog_gmail_get` con Validación**:
+   ```typescript
+   gog_gmail_get: ({ id }: { id: string }) => {
+     if (!id || !isValidGmailThreadId(id)) {
+       return { 
+         error: `ID inválido: "${id}". Debe ser 16 caracteres hexadecimales.`
+       };
+     }
+     const result = runGogCommand(['gmail', 'get', id, '--json']);
+     
+     // Manejo de error 404
+     if (result.error && result.error.includes('404 notFound')) {
+       return {
+         error: `No se encontró el correo con ID "${id}". 
+         Copia el ID EXACTO de gog_gmail_search.`,
+         attemptedId: id
+       };
+     }
+     return result;
+   }
    ```
 
-2. **Flujo de Fallback en `src/llm/service.ts`**:
+3. **Instrucciones Explícitas en gog_gmail_search**:
+   ```typescript
+   gog_gmail_search: ({ query }: { query: string }) => {
+     const result = runGogCommand(['gmail', 'search', `"${query}"`, '--json']);
+     
+     if (result.threads && result.threads.length > 0) {
+       result._instruction = "USA EXACTAMENTE el campo 'id' para gog_gmail_get";
+       result._example = `ID ejemplo: "${result.threads[0].id}"`;
+     }
+     return result;
+   }
    ```
-   Gemini 2.5 Flash (OpenRouter)
-         ↓ (si falla)
-   Gemini 2.0 Flash (OpenRouter)
-         ↓ (si falla)
-   DeepSeek Chat (OpenRouter)
-         ↓ (si falla)
-   Qwen 2.5 72B (OpenRouter)
-         ↓ (si falla)
-   Groq Llama 3.3 (Fallback final)
-   ```
 
-3. **Función `callLLM()`**:
-   - Función genérica que soporta tanto OpenRouter como Groq.
-   - Maneja tools automáticamente.
+### Paso 6.2: SYSTEM_PROMPT Actualizado - Protocolo de Correos
 
-### Paso 6.3: Protocolo de Eficiencia Operativa (SYSTEM_PROMPT)
-
-Se actualizó el prompt del sistema en `src/agent/index.ts`:
+Se añadió una sección específica en `src/agent/index.ts`:
 
 ```
-PROTOCOLO DE EFICIENCIA OPERATIVA:
-- **Gmail:** Si el snippet de la búsqueda contiene la respuesta, detente ahí.
-  Solo usa gog_gmail_get si el usuario pide "detalles", "resumen" o "analizar cuerpo".
-- **YouTube:** Si el video dura más de 20 minutos, pide específicamente "puntos clave".
-- **Priorización:** Si un modelo falla por Rate Limit, informa brevemente: "Canalizando..." y continúa.
+=== PROTOCOLO DE LECTURA Y RESUMEN DE CORREOS (ESTRICTO) ===
+
+1. **Búsqueda PRIMERO, lectura DESPUÉS:**
+   - USA PRIMERO gog_gmail_search con la query apropiada
+   - gog_gmail_search devuelve: id (16 caracteres hex), date, from, subject, snippet
+   - NUNCA uses gog_gmail_get sin haber obtenido el ID primero
+   - NUNCA inventes o adivines IDs
+
+2. **COPIA EXACTA DEL ID (CRÍTICO):**
+   - Ejemplo REAL: "19d30c9e56c058d4" (cada carácter cuenta)
+   - ERROR COMÚN: Cambiar "19d30c9e56c058d4" por "19f1a7a86f4e1989" → Error 404
+   - Si recibes error 404, verifica que copiaste el ID exactamente
+
+3. **Resumen de múltiples correos:**
+   - Presenta lista con: remitente, asunto y fecha
+   - Pide al usuario que especifique cuál leer
+   - Usa gog_gmail_get con el ID EXACTO
+```
+
+### Paso 6.3: Limpieza de Cuerpo de Correos
+
+Función `cleanEmailBody()` mejorada:
+```typescript
+function cleanEmailBody(text: string): string {
+  return text
+    .replace(/<style([\s\S]*?)<\/style>/gi, '')
+    .replace(/<script([\s\S]*?)<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .substring(0, 25000); // Límite aumentado
+}
 ```
 
 ---
 
-## 7. Correcciones Realizadas
+## 7. Smart Routing y Gestión de Tokens
 
-- **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
-- **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
-- **NodeNext**: Se ajustó `tsconfig.json` a `NodeNext` para manejar correctamente las importaciones de módulos ESM (`.js`).
+### Paso 7.1: Optimización de max_tokens
+
+**Problema**: Errores 402 (OpenRouter sin créditos) y 413 (Groq excede límite TPM).
+
+**Solución** (`src/llm/service.ts`):
+
+```typescript
+// Función genérica con max_tokens configurable
+async function callLLM(client, model, messages, tools, maxTokens = 2000) {
+  // ...
+  max_tokens: maxTokens
+}
+
+// Fallback con tokens reducidos
+chatWithTools: async (messages, tools) => {
+  // OpenRouter: 800-1000 tokens (evitar error 402)
+  const response = await callLLM('openrouter', model, messages, tools, 1000);
+  
+  // Groq fallback: 1500 tokens (evitar límite 12000 TPM)
+  const response = await callLLM('groq', config.GROQ_MODEL, messages, tools, 1500);
+}
+```
+
+### Paso 7.2: Reducción de Historial
+
+**Archivo**: `src/db/firestore.ts`
+```typescript
+getHistory: async (userId, limit = 10) => {
+  // Antes: limit = 20
+  // Ahora: limit = 10 para reducir tokens en contexto
+}
+```
+
+### Paso 7.3: Truncamiento de Respuestas Largas
+
+**Archivo**: `src/agent/index.ts`
+```typescript
+async run(userInput, base64Image, callback) {
+  const history = await dbService.getHistory(this.userId, 10);
+  
+  // Truncar tool responses largas
+  const truncatedHistory = history.map(msg => {
+    if (msg.role === 'tool' && msg.content.length > 3000) {
+      return { 
+        ...msg, 
+        content: msg.content.substring(0, 3000) + 
+          '\n\n[...contenido truncado por límite de tokens...]' 
+      };
+    }
+    return msg;
+  });
+}
+```
+
+### Paso 7.4: Configuración .env Actualizada
+
+```env
+# Modelos OpenRouter (principal y fallbacks)
+OPENROUTER_MODEL="google/gemini-2.0-flash-001"
+OPENROUTER_MODEL_SUMMARY="google/gemini-2.0-flash-001"
+OPENROUTER_MODEL_LOGIC="deepseek/deepseek-chat"
+OPENROUTER_MODEL_TECH="qwen/qwen-2.5-72b-instruct"
+
+# Groq (fallback final)
+GROQ_MODEL="llama-3.3-70b-versatile"
+```
+
+### Paso 7.5: Flujo de Fallback
+
+```
+Gemini 2.0 Flash (OpenRouter, 1000 tokens)
+      ↓ (si falla: 402 o error)
+DeepSeek Chat (OpenRouter, 800 tokens)
+      ↓ (si falla)
+Qwen 2.5 72B (OpenRouter, 1000 tokens)
+      ↓ (si falla)
+Groq Llama 3.3 (1500 tokens, fallback final)
+```
 
 ---
 
-## 8. Cómo Mantener el Proyecto
+## 8. Correcciones y Mejoras Realizadas
+
+- **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista.
+- **Validación de IDs**: Implementada validación estricta de 16 caracteres hex para IDs de Gmail.
+- **Manejo de Errores 404**: Mensajes claros cuando un correo no se encuentra.
+- **Gestión de Tokens**: Historial reducido + truncamiento automático + max_tokens optimizados.
+- **Logging Mejorado**: Tags `[LLM]`, `[GOG]`, `[Groq Error]` para depuración clara.
+- **NodeNext**: `tsconfig.json` configurado para módulos ESM.
+
+---
+
+## 9. Cómo Mantener el Proyecto
 
 Para futuras herramientas o mejoras:
 
@@ -220,10 +329,37 @@ Para futuras herramientas o mejoras:
    - Los datos se guardan en `messages` de Firestore.
    - La memoria a largo plazo (key-value) va en `memory`.
 
-4. **Limpieza de correos**:
-   - `cleanEmailBody()` elimina HTML/CSS automáticamente.
-   - Ajusta el límite de 12,000 caracteres si es necesario.
+4. **Gestión de Tokens**:
+   - Ajusta `max_tokens` en `llm/service.ts` según límites de tu plan.
+   - Modifica el límite de historial en `db/firestore.ts`.
+   - Cambia el límite de truncamiento en `agent/index.ts`.
 
 5. **Depuración**:
    - Revisa la consola para ver qué modelo se está usando.
    - Los errores de rate limit activan el fallback automáticamente.
+   - Usa `npm run build` para verificar errores de TypeScript.
+
+---
+
+## 10. Solución de Problemas Comunes
+
+### Error 404 en gog_gmail_get
+**Causa**: ID modificado o incorrecto.
+**Solución**: Ejecuta `gog_gmail_search` nuevamente y copia el ID exacto sin cambiar ningún carácter.
+
+### Error 402 en OpenRouter
+**Causa**: Sin créditos suficientes.
+**Solución**: 
+1. Recarga créditos en https://openrouter.ai/settings/credits
+2. O reduce `max_tokens` en `src/llm/service.ts`
+
+### Error 413 en Groq (Rate Limit Exceeded)
+**Causa**: Exceso de tokens por minuto (límite 12000 TPM en free).
+**Solución**:
+1. Reduce `max_tokens` a 1500 o menos.
+2. Reduce historial a 10 mensajes.
+3. Trunca respuestas de herramientas a 3000 chars.
+
+### Error PERMISSION_DENIED en Firestore
+**Causa**: Service account sin permisos IAM.
+**Solución**: Asigna rol "Usuario de Cloud Datastore" en [IAM & Admin](https://console.cloud.google.com/iam-admin/iam).

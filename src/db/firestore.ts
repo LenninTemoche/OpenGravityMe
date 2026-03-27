@@ -51,7 +51,7 @@ export const dbService = {
     }
   },
 
-  getHistory: async (userId: string, limit: number = 20): Promise<Message[]> => {
+  getHistory: async (userId: string, limit: number = 10): Promise<Message[]> => {
     try {
       const snapshot = await db
         .collection('messages')

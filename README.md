@@ -7,8 +7,9 @@ Tu agente de IA personal, local, privado y seguro, ahora con memoria en la nube.
 - **Interacción por Voz 🎙️**: Envíale notas de voz y te responderá con audio. (Usa *Whisper* de Groq para STT súper rápido y *Google Translate TTS* gratis para síntesis).
 - **IA Multimodal y Documental 👁️📄**: Sube imágenes para analizar visualmente (con backup vía OpenRouter) o envía documentos (PDF, DOCX, XLSX, TXT) para extraer y procesar su contenido al instante con utilidades locales gratuitas.
 - **Asistente Avanzado (Google Workspace) 📧📅**: Integra el CLI `gog` para otorgar "Habilidades de Contexto" y buscar correos prioritarios, leer hilos completos, resumir agendas (Briefing Matutino) y validar tus hojas de Google Sheets con lógica autogestionada.
-- **Lectura de Correos Completa**: Nueva herramienta `gog_gmail_get` que obtiene el cuerpo completo de correos usando el thread ID, con limpieza automática de HTML/CSS para optimizar el contexto.
-- **Smart Routing de LLM**: Sistema de fallback inteligente: Gemini 2.5 Flash → Gemini 2.0 → DeepSeek → Qwen → Groq, configurable desde `.env`.
+- **Lectura de Correos Completa con Validación de IDs**: Nueva herramienta `gog_gmail_get` que obtiene el cuerpo completo de correos usando el thread ID (16 caracteres hex), con validación estricta para evitar errores 404 y limpieza automática de HTML/CSS.
+- **Smart Routing de LLM con Fallback Inteligente**: Sistema de fallback: Gemini 2.0 Flash → DeepSeek → Qwen → Groq, con `max_tokens` optimizados (800-1500) para evitar límites de rate y créditos.
+- **Gestión de Tokens Optimizada**: Historial limitado a 10 mensajes + truncamiento automático de respuestas largas (3000 chars) para no exceder límites de Groq (12000 TPM).
 - **Memoria en la Nube**: Google Firebase (Firestore) para persistencia escalable.
 - **Herramientas**: Capacidad de ejecutar funciones nativas, leer archivos y obtener fechas.
 - **Seguridad**: Whitelist de IDs de Telegram y credenciales controlables en local.
@@ -37,7 +38,7 @@ Tu agente de IA personal, local, privado y seguro, ahora con memoria en la nube.
    GROQ_API_KEY="tu_clave_groq"
    GROQ_MODEL="llama-3.3-70b-versatile"
    OPENROUTER_API_KEY="tu_clave_openrouter"
-   OPENROUTER_MODEL="google/gemini-2.5-flash"
+   OPENROUTER_MODEL="google/gemini-2.0-flash-001"
    OPENROUTER_MODEL_SUMMARY="google/gemini-2.0-flash-001"
    OPENROUTER_MODEL_LOGIC="deepseek/deepseek-chat"
    OPENROUTER_MODEL_TECH="qwen/qwen-2.5-72b-instruct"
@@ -56,7 +57,7 @@ Para más detalles paso a paso, consulta [Guia.md](./Guia.md).
 - `src/bot/`: Lógica del bot de Telegram (grammy).
 - `src/agent/`: Bucle de razonamiento (AgentLoop) con SYSTEM_PROMPT.
 - `src/db/`: Capa de persistencia en Firestore Cloud.
-- `src/llm/`: Integración con Groq y OpenRouter (Smart Routing).
-- `src/tools/`: Herramientas (funciones que la IA puede usar: gmail, calendar, sheets).
+- `src/llm/`: Integración con Groq y OpenRouter (Smart Routing + gestión de tokens).
+- `src/tools/`: Herramientas (funciones que la IA puede usar: gmail, calendar, sheets) con validación de IDs.
 - `src/services/`: Servicios de audio (STT/TTS) y parseo de documentos.
 - `src/config/`: Validación de entorno con Zod.
