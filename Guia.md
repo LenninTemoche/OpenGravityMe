@@ -363,3 +363,216 @@ Para futuras herramientas o mejoras:
 ### Error PERMISSION_DENIED en Firestore
 **Causa**: Service account sin permisos IAM.
 **Solución**: Asigna rol "Usuario de Cloud Datastore" en [IAM & Admin](https://console.cloud.google.com/iam-admin/iam).
+
+---
+
+## 11. Próximos Pasos y Mejoras Futuras 🚀
+
+Aquí tienes una hoja de ruta con mejoras potenciales para continuar potenciando OpenGravityMe:
+
+### 11.1 Mejoras para YouTube (Prioridad Alta)
+
+**Problema Actual**: YouTube bloquea transcripciones desde servidor.
+
+**Soluciones Propuestas**:
+
+1. **Usar API de YouTube Data v3**:
+   ```typescript
+   // Requiere API Key de Google Cloud
+   const youtube = google.youtube({ version: 'v3', auth: YOUTUBE_API_KEY });
+   const captions = await youtube.captions.list({ /* ... */ });
+   ```
+   - Habilitar YouTube Data API v3 en Google Cloud
+   - Usar OAuth 2.0 para acceso a transcripciones
+
+2. **Servicio de Terceros**:
+   - Integrar `youtube-transcript` (npm) con proxy rotativo
+   - Usar servicios como `yt-dlp` vía subprocess
+
+3. **Alternativa con Whisper**:
+   - Descargar audio del video (si es posible legalmente)
+   - Transcribir con Groq Whisper locally
+   - Devolver transcripción + timestamps
+
+### 11.2 Mejoras para Gmail (Prioridad Alta)
+
+1. **Marcado de Correos como Leídos**:
+   ```typescript
+   gog_gmail_mark_read: ({ id }: { id: string }) => {
+     return runGogCommand(['gmail', 'modify', id, '--remove', 'UNREAD', '--json']);
+   }
+   ```
+
+2. **Enviar Correos**:
+   ```typescript
+   gog_gmail_send: ({ to, subject, body }: { to: string, subject: string, body: string }) => {
+     return runGogCommand(['gmail', 'send', to, '--subject', subject, '--body', body]);
+   }
+   ```
+
+3. **Búsqueda Avanzada con Filtros**:
+   - Agregar parámetros: `from:`, `to:`, `after:`, `before:`, `has:attachment`
+   - Paginación de resultados (nextPageToken)
+
+4. **Adjuntos de Correos**:
+   - Extraer y descargar archivos adjuntos
+   - Procesar con documentService automáticamente
+
+### 11.3 Mejoras de Memoria y Contexto (Prioridad Media)
+
+1. **Memoria a Largo Plazo**:
+   ```typescript
+   // Guardar preferencias del usuario
+   await dbService.setMemory('preferred_language', 'es');
+   await dbService.setMemory('timezone', 'America/Lima');
+   ```
+
+2. **Resumen Automático de Conversaciones**:
+   - Cada 20 mensajes, generar resumen con IA
+   - Guardar resumen en memoria para contexto futuro
+
+3. **Recordatorios Programados**:
+   ```typescript
+   // Usando node-cron o similar
+   cron.schedule('0 8 * * *', async () => {
+     await sendMorningBriefing(userId);
+   });
+   ```
+
+### 11.4 Mejoras de Google Workspace (Prioridad Media)
+
+1. **Google Drive**:
+   - Listar archivos recientes
+   - Buscar por nombre/tipo
+   - Leer contenido de Docs directamente
+
+2. **Google Tasks**:
+   - Crear/leer tareas
+   - Marcar como completadas
+   - Integrar con recordatorios
+
+3. **Google Contacts**:
+   - Buscar contactos por nombre/email
+   - Crear nuevos contactos
+
+4. **Google Meet**:
+   - Crear reuniones desde calendario
+   - Enviar invitaciones automáticas
+
+### 11.5 Mejoras de IA y Modelos (Prioridad Media)
+
+1. **Modelos Locales con Ollama**:
+   ```env
+   OLLAMA_MODEL="llama3.1:8b"
+   OLLAMA_BASE_URL="http://localhost:11434"
+   ```
+   - Fallback gratuito ilimitado
+   - Privacidad total
+
+2. **Embeddings para Búsqueda Semántica**:
+   - Guardar embeddings de mensajes en Firestore
+   - Búsqueda vectorial para contexto relevante
+
+3. **Fine-tuning del Prompt**:
+   - A/B testing de SYSTEM_PROMPT
+   - Analizar logs para mejorar respuestas
+
+### 11.6 Mejoras de Telegram Bot (Prioridad Baja)
+
+1. **Comandos Personalizados**:
+   ```typescript
+   bot.command('briefing', (ctx) => sendMorningBriefing(ctx));
+   bot.command('resumen', (ctx) => sendDailySummary(ctx));
+   bot.command('ayuda', (ctx) => sendHelpMenu(ctx));
+   ```
+
+2. **Menús Inline**:
+   - Botones para acciones rápidas
+   - Menú de configuración
+
+3. **Soporte para Grupos**:
+   - Whitelist de grupos permitidos
+   - Comandos específicos para grupos
+
+### 11.7 Mejoras de Infraestructura (Prioridad Baja)
+
+1. **Dockerización**:
+   ```dockerfile
+   FROM node:20-alpine
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm ci --only=production
+   COPY . .
+   CMD ["node", "dist/index.js"]
+   ```
+
+2. **Deploy en la Nube**:
+   - Railway.app (gratis con límites)
+   - Render.com (free tier disponible)
+   - Google Cloud Run (pago por uso)
+
+3. **Monitoreo y Logs**:
+   - Integrar con Sentry para errores
+   - Logs estructurados con Winston
+   - Dashboard de métricas
+
+### 11.8 Características Avanzadas (Futuro)
+
+1. **Soporte Multi-usuario**:
+   - Base de datos separada por usuario
+   - Configuración individual por usuario
+   - Límites de uso por usuario
+
+2. **Web Dashboard**:
+   - React/Next.js para interfaz web
+   - Ver historial de conversaciones
+   - Configurar preferencias
+
+3. **Integraciones Adicionales**:
+   - Slack bot
+   - Discord bot
+   - API REST para terceros
+
+4. **Análisis de Sentimientos**:
+   - Detectar urgencia en correos
+   - Priorizar por tono emocional
+
+5. **Automatizaciones (IFTTT-style)**:
+   ```
+   SI correo de "jefe" con "urgente" ENTONCES → notificar por Telegram
+   SI evento calendario en 30min ENTONCES → enviar recordatorio
+   ```
+
+---
+
+## 12. Roadmap Sugerido
+
+| Fase | Mejora | Complejidad | Impacto |
+|------|--------|-------------|---------|
+| 1 | YouTube transcripts (API oficial) | Media | Alto |
+| 2 | Enviar correos Gmail | Baja | Alto |
+| 3 | Marcar correos como leídos | Baja | Medio |
+| 4 | Memorias a largo plazo | Media | Alto |
+| 5 | Google Drive integration | Media | Medio |
+| 6 | Dockerización | Baja | Medio |
+| 7 | Web Dashboard | Alta | Bajo |
+| 8 | Multi-usuario | Alta | Medio |
+
+---
+
+## 13. Recursos y Enlaces Útiles
+
+- **Groq Console**: https://console.groq.com
+- **OpenRouter**: https://openrouter.ai
+- **Firebase Console**: https://console.firebase.google.com
+- **Google Cloud Console**: https://console.cloud.google.com
+- **Telegram Bot API**: https://core.telegram.org/bots/api
+- **gog CLI**: https://github.com/derailed/gog
+- **Documentación Oficial**:
+  - [Grammy.js](https://grammy.dev)
+  - [Groq SDK](https://github.com/groq/groq-typescript)
+  - [Firebase Admin](https://firebase.google.com/docs/admin/setup)
+
+---
+
+*Última actualización: Marzo 2026*

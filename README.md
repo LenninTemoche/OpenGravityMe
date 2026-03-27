@@ -61,3 +61,19 @@ Para más detalles paso a paso, consulta [Guia.md](./Guia.md).
 - `src/tools/`: Herramientas (funciones que la IA puede usar: gmail, calendar, sheets) con validación de IDs.
 - `src/services/`: Servicios de audio (STT/TTS) y parseo de documentos.
 - `src/config/`: Validación de entorno con Zod.
+
+## Próximos Pasos 🚀
+
+Mejoras recomendadas para potenciar el proyecto:
+
+1. **YouTube Transcripts** - Integrar API oficial de YouTube Data v3 para transcripciones reales
+2. **Enviar Correos** - Nueva herramienta `gog_gmail_send` para redactar y enviar emails
+3. **Marcar como Leído** - Herramienta `gog_gmail_mark_read` para gestión de bandeja
+4. **Memoria a Largo Plazo** - Guardar preferencias y resúmenes de conversaciones
+5. **Google Drive** - Listar y leer archivos directamente desde Drive
+6. **Dockerización** - Contenerizar para deploy fácil en la nube
+
+Para más detalles, consulta la [Guía Completa](./Guia.md#11-próximos-pasos-y-mejoras-futuras).
+
+## Licencia
+ISC
