@@ -127,7 +127,76 @@ Dado que el bot corre localmente, el agente se apalanca en las credenciales "Oau
 
 ---
 
-## 6. Correcciones Realizadas
+## 6. Mejora de Lectura de Correos y Smart Routing
+
+### Paso 6.1: Implementación de `gog_gmail_get`
+
+Para poder leer el **cuerpo completo** de los correos (no solo el snippet), se añadió una nueva herramienta:
+
+1. **Nueva Herramienta en `src/tools/index.ts`**:
+   - `gog_gmail_get`: Obtiene el cuerpo completo, asunto, remitente y fecha de un correo usando el **thread ID**.
+   - **Importante**: Usa el campo `"id"` devuelto por `gog_gmail_search` (ej: `"19d1c57009c3ebd8"`), no el `messageId` interno.
+
+2. **Limpieza Automática de HTML**:
+   - Se implementó la función `cleanEmailBody()` que elimina:
+     - Etiquetas `<style>` y `<script>`
+     - Todo el HTML con regex
+     - Normaliza espacios
+     - Límite de 12,000 caracteres para no saturar el contexto del modelo
+
+3. **Descripción Mejorada en la Herramienta**:
+   ```typescript
+   {
+     name: 'gog_gmail_get',
+     description: 'Obtiene el contenido completo (cuerpo, asunto, remitente, fecha) de un correo electrónico específico usando el ID del hilo de Gmail. IMPORTANTE: Usa el campo "id" devuelto por gog_gmail_search (no el messageId interno).'
+   }
+   ```
+
+### Paso 6.2: Smart Routing de Modelos (Fallback en Cascada)
+
+Para evitar rate limits y optimizar costos, se implementó un sistema de fallback inteligente:
+
+1. **Configuración en `.env`**:
+   ```env
+   OPENROUTER_MODEL="google/gemini-2.5-flash"        # Principal
+   OPENROUTER_MODEL_SUMMARY="google/gemini-2.0-flash-001"  # Resúmenes
+   OPENROUTER_MODEL_LOGIC="deepseek/deepseek-chat"   # Razonamiento
+   OPENROUTER_MODEL_TECH="qwen/qwen-2.5-72b-instruct" # Técnico
+   GROQ_MODEL="llama-3.3-70b-versatile"              # Fallback final
+   ```
+
+2. **Flujo de Fallback en `src/llm/service.ts`**:
+   ```
+   Gemini 2.5 Flash (OpenRouter)
+         ↓ (si falla)
+   Gemini 2.0 Flash (OpenRouter)
+         ↓ (si falla)
+   DeepSeek Chat (OpenRouter)
+         ↓ (si falla)
+   Qwen 2.5 72B (OpenRouter)
+         ↓ (si falla)
+   Groq Llama 3.3 (Fallback final)
+   ```
+
+3. **Función `callLLM()`**:
+   - Función genérica que soporta tanto OpenRouter como Groq.
+   - Maneja tools automáticamente.
+
+### Paso 6.3: Protocolo de Eficiencia Operativa (SYSTEM_PROMPT)
+
+Se actualizó el prompt del sistema en `src/agent/index.ts`:
+
+```
+PROTOCOLO DE EFICIENCIA OPERATIVA:
+- **Gmail:** Si el snippet de la búsqueda contiene la respuesta, detente ahí.
+  Solo usa gog_gmail_get si el usuario pide "detalles", "resumen" o "analizar cuerpo".
+- **YouTube:** Si el video dura más de 20 minutos, pide específicamente "puntos clave".
+- **Priorización:** Si un modelo falla por Rate Limit, informa brevemente: "Canalizando..." y continúa.
+```
+
+---
+
+## 7. Correcciones Realizadas
 
 - **Bug de Respuesta Doble**: Se corrigió el flujo del `AgentLoop` para que solo envíe mensajes al usuario cuando la respuesta final de la IA esté lista (evitando enviar texto intermedio cuando aún va a llamar a una herramienta).
 - **Prompt System**: Se reforzó el prompt del sistema para evitar que el modelo alucine etiquetas de texto como `<function=...>` y use la interfaz de herramientas oficial.
@@ -135,8 +204,26 @@ Dado que el bot corre localmente, el agente se apalanca en las credenciales "Oau
 
 ---
 
-## 7. Cómo Mantener el Proyecto
-Para futuras herramientas:
-1. Agrégalas en `src/tools/index.ts`.
-2. Los datos de la conversación se guardan automáticamente en la colección `messages` de Firestore.
-3. La "memoria a largo plazo" (key-value) se guarda en la colección `memory`.
+## 8. Cómo Mantener el Proyecto
+
+Para futuras herramientas o mejoras:
+
+1. **Agregar nuevas herramientas**:
+   - Añádelas en `src/tools/index.ts` (definición + handler).
+   - Actualiza `SYSTEM_PROMPT` si es necesario.
+
+2. **Configurar modelos de IA**:
+   - Edita las variables `OPENROUTER_MODEL_*` en `.env`.
+   - El fallback está en `src/llm/service.ts`.
+
+3. **Memoria y Conversaciones**:
+   - Los datos se guardan en `messages` de Firestore.
+   - La memoria a largo plazo (key-value) va en `memory`.
+
+4. **Limpieza de correos**:
+   - `cleanEmailBody()` elimina HTML/CSS automáticamente.
+   - Ajusta el límite de 12,000 caracteres si es necesario.
+
+5. **Depuración**:
+   - Revisa la consola para ver qué modelo se está usando.
+   - Los errores de rate limit activan el fallback automáticamente.

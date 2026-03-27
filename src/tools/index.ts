@@ -8,6 +8,18 @@ const __dirname = path.dirname(__filename);
 // __dirname apunta a src/tools, subir dos niveles para llegar al root donde está gog.exe
 const projectRoot = path.join(__dirname, '..', '..');
 
+// Función para limpiar el cuerpo de los correos (eliminar HTML, CSS, JS)
+function cleanEmailBody(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/<style([\s\S]*?)<\/style>/gi, '') // Elimina CSS
+    .replace(/<script([\s\S]*?)<\/script>/gi, '') // Elimina JS
+    .replace(/<[^>]+>/g, ' ') // Elimina etiquetas HTML
+    .replace(/\s+/g, ' ') // Normaliza espacios
+    .trim()
+    .substring(0, 12000); // Límite de seguridad para modelos de 16k-32k context
+}
+
 // Helpers para ejecutar gog CLI
 function runGogCommand(args: string[]): any {
   try {
@@ -17,7 +29,12 @@ function runGogCommand(args: string[]): any {
     // maxBuffer aumentado a 10MB para manejar grandes volúmenes de hilos de correo
     const output = execSync(cmd, { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 });
     try {
-      return JSON.parse(output);
+      const result = JSON.parse(output);
+      // Limpiar el cuerpo del correo si existe
+      if (result.body) {
+        result.body = cleanEmailBody(result.body);
+      }
+      return result;
     } catch {
       return output;
     }
@@ -82,6 +99,20 @@ export const toolDefinitions = [
         required: ['sheetId', 'range'],
       },
     },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'gog_gmail_get',
+      description: 'Obtiene el contenido completo (cuerpo, asunto, remitente, fecha) de un correo electrónico específico usando el ID del hilo de Gmail. IMPORTANTE: Usa el campo "id" devuelto por gog_gmail_search (no el messageId interno). Úsalo después de gog_gmail_search para leer el cuerpo completo del correo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'El ID del hilo de Gmail (campo "id" de gog_gmail_search, ej: "19d1c57009c3ebd8")' },
+        },
+        required: ['id'],
+      },
+    },
   }
 ];
 
@@ -91,6 +122,10 @@ export const toolHandlers: Record<string, Function> = {
   },
   gog_gmail_search: ({ query }: { query: string }) => {
     return runGogCommand(['gmail', 'search', `"${query}"`, '--json']);
+  },
+  gog_gmail_get: ({ id }: { id: string }) => {
+    // El ID debe ser el "threadId" devuelto por gog_gmail_search
+    return runGogCommand(['gmail', 'get', id, '--json']);
   },
   gog_calendar_events: ({ from, to }: { from: string, to: string }) => {
     return runGogCommand(['calendar', 'events', 'primary', '--from', from, '--to', to, '--json']);
